@@ -1,0 +1,73 @@
+---
+title: "Profiling R Codes"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+Profiling involves running many lines of code to find _bottlenecks_. Sometimes we have a good hunch on which lines of codes are taking up the bulk of the runtime. Other times, we don't. Profiling allows us to pinpoint which lines of codes are bottlenecks with certainty. Hence, allowing us to focus on these bottlenecks and potentially find alternatives to increase overall efficiency. We will be using the `profvis()` function from its eponymous package.
+
+```{r eval=FALSE}
+install.packages("profvis")
+```
+
+## Dataset
+In this tutorial, we will be using the GENCODE gene transfer file (GTF) file. A GTF file contains the comprehensive gene, transcript, and exon annotations for a give species. The latest version of a GTF file can be retrieved from the GENCODE repository (https://www.gencodegenes.org/). Here, we will using the human GTF file version 31. The data frame consists of 9 columns and a brief explanation of each of these columns as follows:
+
+```{r echo=FALSE}
+library(knitr)
+
+column <- as.character(c(1:9))
+content <- c("Chromosome name", "Annotation source", "Feature type", "Genomic start location", "Genomic end location", "Score (not used)", "Genomic strand", "Genomic phase (for CDS features)", "Attributes")
+value <- c("1, 2, 3", "ENSEMBLE, HAVANA", "gene, transcript, exon", "interger", "interger", ".", "+, -", "., 0, 1, 2", "gene_id, transcript_id, gene_type, gene_status, gene_name, transcript_type, transcript_status, transcript_name, exon_number, exon_id")
+kable(data.frame("Column"=column, "Content"=content, "Value"=value))
+```
+
+# Profiling
+The following set of codes reads in the GTF file and then extracts the gene names for each gene.
+
+```{r }
+# Load packages
+library(profvis)
+
+profvis({
+
+  # Read file
+  df <- read.table("Datasets/gencode.v31.annotation.gtf", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+  
+  # Subset required feature
+  df <- df[which(df$V3=="gene"), ]
+  
+  # Retrieve gene names
+  attr <- sapply(strsplit(df$V9, split=";"), function(x) {x[3]})
+  
+})
+```
+
+Clearly, reading in the file takes up majority of the time, i.e. this step is the bottleneck. This is because the file size is more than 1GB! As we have learned from _Efficient R Codes_, we can use `fread()` from __data.table__ package to read in the file more efficiently.
+
+```{r}
+# Load packages
+library(data.table)
+
+profvis({
+
+  # Read file
+  df <- fread("Datasets/gencode.v31.annotation.gtf", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+  
+  # Subset required feature
+  df <- df[which(df$V3=="gene"), ]
+  
+  # Retrieve gene names
+  attr <- sapply(strsplit(df$V9, split=";"), function(x) {x[3]})
+  
+})
+```
+
+Replacing `read.table()` with `fread()` decreased time taken to read in the file, thus increasing overall efficiency.
+
+## Reference
+Gillespie, C. and Lovelace, R. 2017. _Efficient R Programming_. O'Reilly Media.

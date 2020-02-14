@@ -1,0 +1,38 @@
+---
+title: "Assignment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+For this assignment, you will use The Cancer Genome Atlas (TCGA) glioma RNA-sequencing data. This dataset is a matrix of RSEM normalized and log2-transformed gene expression values. This dataset consists of 1,129 samples and was retrived from Broad GDAC Firehose (https://gdac.broadinstitute.org/).
+
+Here, you're tasked to calculate the coefficient of variance (CV2) for each gene. The CV2 is calculated by dividing variance by the square of mean. CV2 is often used as a measurement of variability, and typically genes with moderate-to-high CV2 are brought forward for downstream analysis such as dimension reduction and clustering.
+
+Specifically, you need to benchmark the different approaches taught in _Efficient R Codes_ for calculating CV2, namely:
+
+- `for` loops that grow vectors
+- `for` loops that don't grow vectors
+- Utilizing apply family
+- Parallel computing
+- Vectorize code
+
+## Getting started
+```{r}
+# Load packages
+library(data.table)
+library(parallel)
+library(microbenchmark)
+
+# Read file
+df <- fread("Datasets/GBMLGG.uncv2.mRNAseq_RSEM_normalized_log2.txt", sep="\t", header=TRUE, stringsAsFactors=FALSE)
+
+# Check dimensions
+dim(df)
+
+# Sneak peek
+df[100:105,1:5]
+```

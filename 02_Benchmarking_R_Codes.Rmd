@@ -1,0 +1,133 @@
+---
+title: "Benchmarking R Codes"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+Benchmaking is the process of testing the performance of specific operations _repeatedly_. Benchmarking R codes allows us to compare the speed at which different sets of codes/functions run and will subsequently inform us of the most efficient set of code/function to use. Previously in _Efficient R Codes_, we looked into different strategies for writing efficient R codes, namely avoid growing vectors in `for` loops, utilizing `apply` family as an alternative to `for` loops, exploiting parallel computing, and using vectorized codes. We used `system.time()` function to determine the time required to execute each strategy. Nevertheless, this approach has several limitations:
+
+- Allows evaluation of only a single set of codes at any one time.
+- Returns slightly different results when tested on the same set of codes (due to stochasticity).
+- Unable to detect small measurements, e.g. microseconds.
+
+The `microbenchmark()` function from its eponymous package can be used to address these limitations of `system.time()`:
+
+- Allows evaluation and comparison of multiple sets of codes.
+- Computes the average runtime by evaluating the same set of codes multiple times. This mitigates stochastic effect in the evaluated runtime.
+- Able to detect small differences in runtime between different sets of codes, i.e. up to nanoseconds.
+
+```{r eval=FALSE}
+install.packages("microbenchmark")
+```
+
+## Dataset
+In this tutorial, we will be using the GENCODE gene transfer file (GTF) file. A GTF file contains the comprehensive gene, transcript, and exon annotations for a give species. The latest version of a GTF file can be retrieved from the GENCODE repository (https://www.gencodegenes.org/). Here, we will using the human GTF file version 31. The data frame consists of 9 columns and a brief explanation of each of these columns as follows:
+
+```{r echo=FALSE}
+library(knitr)
+
+column <- as.character(c(1:9))
+content <- c("Chromosome name", "Annotation source", "Feature type", "Genomic start location", "Genomic end location", "Score (not used)", "Genomic strand", "Genomic phase (for CDS features)", "Attributes")
+value <- c("1, 2, 3", "ENSEMBLE, HAVANA", "gene, transcript, exon", "interger", "interger", ".", "+, -", "., 0, 1, 2", "gene_id, transcript_id, gene_type, gene_status, gene_name, transcript_type, transcript_status, transcript_name, exon_number, exon_id")
+kable(data.frame("Column"=column, "Content"=content, "Value"=value))
+```
+
+```{r }
+# Load package
+library(data.table)
+
+# Read file
+df <- fread("Datasets/gencode.v31.annotation.gtf", sep="\t", header=FALSE, stringsAsFactors=FALSE)
+
+# Subset required feature
+df <- df[which(df$V3=="gene"), ]
+
+# Check dimensions
+dim(df)
+```
+
+## Benchmarking
+Here, we will benchmark the different sets of  R codes used previously in _Efficient R Codes_, namely avoid growing vectors in `for` loops, utilizing `apply` family as an alternatives to `for` loops, exploiting parallel computing, and using vectorized codes against a `for` loop that grows its vector. The `times` option specifies the no. of times to evaluate each set of codes. The default is 100 times, but we'll do just 5 times in the interest of time.
+
+```{r}
+# Load package
+library(microbenchmark)
+library(parallel)
+
+# Create cl object for parallel computing
+cl <- makeCluster(4)
+
+# Perform benchmarking
+microbenchmark(
+  
+  # for loop that grows its vector
+  "loop.grow.vector"={
+    
+    vec <- NULL
+    for(i in 1:nrow(df)) {
+        df.small <- df[i, ]
+        v9.split <- strsplit(df.small$V9, split=";")
+        attr <- sapply(v9.split, function(x) {x[3]})
+        vec <- c(vec, attr)
+    }
+    
+  },
+  
+  # Avoid growing vector
+  "loop.dont.grow.vector"={
+    
+    vec <- numeric(nrow(df))
+    for(i in 1:nrow(df)) {
+      df.small <- df[i, ]
+      v9.split <- strsplit(df.small$V9, split=";")
+      attr <- sapply(v9.split, function(x) {x[3]})
+      vec[i] <- attr
+    
+    }
+    
+  },
+  
+  # Using the apply function
+  "apply.function"={
+    
+    retrieve_gene_name <- function(x) {
+      y <- strsplit(x[9], split=";")
+      sapply(y, function(z) {z[3]})
+    }
+    attr <- apply(df, 1, retrieve_gene_name)
+  
+  },
+  
+  # Parallel computing
+  "apply.parallel.computing"={
+    
+    retrieve_gene_name <- function(x) {
+      y <- strsplit(x[9], split=";")
+      sapply(y, function(z) {z[3]})
+    }
+    attr <- parApply(cl, df, 1, retrieve_gene_name)
+    
+  },
+  
+  # Vectorized code
+  "vectorized.code"={
+    
+   attr <- sapply(strsplit(df$V9, split=";"), function(x) {x[3]})
+   
+  },
+  
+  times=5
+  
+)
+```
+
+- Clearly using the `apply()` function and vectorized code are more efficient among all the sets of codes tested. 
+- For the `for` loop approach, initialising the vector with final length and substituting the values by subscripting gives superior performance compared to growing the vector.
+- For the `apply()` approach, parallel computing increases the function's efficiency.
+
+## Reference
+Gillespie, C. and Lovelace, R. 2017. _Efficient R Programming_. O'Reilly Media.
